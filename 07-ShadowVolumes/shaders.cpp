@@ -104,6 +104,17 @@ bool compileShaders()
   }
   uniformBlockBinding(shaderProgram[ShaderProgram::Default]);
 
+  // "My" test shader program for spot lights
+  shaderProgram[ShaderProgram::SpotlightDefault] = glCreateProgram();
+  glAttachShader(shaderProgram[ShaderProgram::SpotlightDefault], vertexShader[VertexShader::Default]);
+  glAttachShader(shaderProgram[ShaderProgram::SpotlightDefault], fragmentShader[FragmentShader::TestDefault]);
+  if (!ShaderCompiler::LinkProgram(shaderProgram[ShaderProgram::SpotlightDefault]))
+  {
+      cleanUp();
+      return false;
+  }
+  uniformBlockBinding(shaderProgram[ShaderProgram::SpotlightDefault]);
+
   // Shader program for non-instanced geometry w/o color
   shaderProgram[ShaderProgram::DefaultDepthPass] = glCreateProgram();
   glAttachShader(shaderProgram[ShaderProgram::DefaultDepthPass], vertexShader[VertexShader::Default]);
@@ -126,6 +137,18 @@ bool compileShaders()
   }
   uniformBlockBinding(shaderProgram[ShaderProgram::Instancing]);
   uniformBlockBinding(shaderProgram[ShaderProgram::Instancing], "InstanceBuffer", 1);
+
+  // "My" shader program for instanced geometry w/ color for spot lights
+  shaderProgram[ShaderProgram::InstancingSpotLights] = glCreateProgram();
+  glAttachShader(shaderProgram[ShaderProgram::InstancingSpotLights], vertexShader[VertexShader::Instancing]);
+  glAttachShader(shaderProgram[ShaderProgram::InstancingSpotLights], fragmentShader[FragmentShader::TestDefault]);
+  if (!ShaderCompiler::LinkProgram(shaderProgram[ShaderProgram::InstancingSpotLights]))
+  {
+      cleanUp();
+      return false;
+  }
+  uniformBlockBinding(shaderProgram[ShaderProgram::InstancingSpotLights]);
+  uniformBlockBinding(shaderProgram[ShaderProgram::InstancingSpotLights], "InstanceBuffer", 1);
 
   // Shader program for instanced geometry w/o color
   shaderProgram[ShaderProgram::InstancingDepthPass] = glCreateProgram();

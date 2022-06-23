@@ -97,7 +97,7 @@ Camera camera;
 // Scene helper instance
 Scene &scene(Scene::GetInstance());
 // Render modes
-RenderMode renderMode = {true, false, true, MSAA_SAMPLES};
+RenderSettings renderMode = {true, false, true, MSAA_SAMPLES};
 // Enable/disable light movement
 bool animate = false;
 // Enable/disable Carcmack's reverse
@@ -549,7 +549,7 @@ void mainLoop()
     // Process keyboard input
     processInput(dt);
 
-    // Update scene
+    // Update scene - just moves the lights
     if (animate)
       scene.Update(dt);
 
@@ -580,7 +580,9 @@ int main()
   }
 
   // Scene initialization
-  scene.Init(10, 5);
+  int numLights = 1;
+  int numCubes = 5;
+  scene.Init(numCubes, numLights);
 
   // Enter the application main loop
   mainLoop();

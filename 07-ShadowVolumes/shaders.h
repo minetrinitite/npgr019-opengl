@@ -12,7 +12,7 @@ namespace ShaderProgram
 {
   enum
   {
-    Default, DefaultDepthPass, Instancing, InstancingDepthPass, InstancedShadowVolume, PointRendering, Tonemapping, NumShaderPrograms
+    Default, SpotlightDefault, DefaultDepthPass, Instancing, InstancingSpotLights, InstancingDepthPass, InstancedShadowVolume, PointRendering, Tonemapping, NumShaderPrograms
   };
 }
 
@@ -274,7 +274,7 @@ namespace FragmentShader
 {
   enum
   {
-    Default, SingleColor, Null, Tonemapping, NumFragmentShaders
+    Default, TestDefault, SingleColor, Null, Tonemapping, NumFragmentShaders
   };
 }
 
@@ -366,6 +366,111 @@ void main()
 
   // Calculate the final color
   vec3 finalColor = albedo * (ambient + diffuse) + specular;
+  color = vec4(finalColor, 1.0f);
+}
+)",
+// ----------------------------------------------------------------------------
+// Test second Default fragment shader source
+// ----------------------------------------------------------------------------
+R"(
+#version 330 core
+
+// The following is not not needed since GLSL version #430
+#extension GL_ARB_explicit_uniform_location : require
+
+// The following is not not needed since GLSL version #420
+#extension GL_ARB_shading_language_420pack : require
+
+// Texture sampler
+layout (binding = 0) uniform sampler2D Diffuse;
+layout (binding = 1) uniform sampler2D Normal;
+layout (binding = 2) uniform sampler2D Specular;
+layout (binding = 3) uniform sampler2D Occlusion;
+
+// Note: explicit location because AMD APU drivers screw up position when linking against
+// the default vertex shader with mat4x3 modelToWorld at location 0 occupying 4 slots
+
+// Light position/direction
+layout (location = 4) uniform vec4 lightPosWS;
+// View position in world space coordinates
+layout (location = 5) uniform vec4 viewPosWS;
+// Light color
+layout (location = 6) uniform vec4 lightColor;
+// Specific spot light uniforms
+// Direction of the light
+layout (location = 7) uniform vec3 lightDirection;
+// Inner angle of the light where intensity is max and constant
+layout (location = 8) uniform float innerAngleDegrees;
+// Outer angle of the light where intensity is with falloff
+layout (location = 9) uniform float outerAngleDegrees;
+// Max distance after which the light is not calculated
+layout (location = 10) uniform float maxLightDistance;
+
+// Fragment shader inputs
+in VertexData
+{
+  vec2 texCoord;
+  vec3 tangent;
+  vec3 bitangent;
+  vec3 normal;
+  vec4 worldPos;
+} vertexIn;
+
+// Fragment shader outputs
+layout (location = 0) out vec4 color;
+
+void main()
+{
+  // Get values from textures
+  vec3 albedoTextureAtVertex = texture(Diffuse, vertexIn.texCoord.st).rgb;
+  vec3 normalTextureAtVertex = texture(Normal, vertexIn.texCoord.st).rgb;
+  float specularTextureAtVertex = texture(Specular, vertexIn.texCoord.st).r;
+  float occlusionTextureAtVertex = texture(Occlusion, vertexIn.texCoord.st).r;
+
+  vec3 directionToLight = lightPosWS.xyz - vertexIn.worldPos.xyz;
+  float lengthSq = dot(directionToLight, directionToLight);
+  float directionToLightLength = sqrt(lengthSq);
+  directionToLight /= directionToLightLength;
+  
+  // Ambient/diffuse light component intensity modulation
+  const float ambientIntensity = 0.0f; //lightColor.a;
+
+  const float directIntensity = lightPosWS.w;
+
+  // Calculate world-space normal
+  mat3 STN = {vertexIn.tangent, vertexIn.bitangent, vertexIn.normal};
+  vec3 fragmentNormalWS = STN * (normalTextureAtVertex * 2.0f - 1.0f);
+
+  // Calculate the Phong model terms: ambient, diffuse, specular
+  vec3 ambient = albedoTextureAtVertex * ambientIntensity * occlusionTextureAtVertex * lightColor.rgb; // +
+
+  // Calculate diffuse coefficient
+  float NdotL = max(0.0f, dot(fragmentNormalWS, directionToLight));
+
+  vec3 diffuse = albedoTextureAtVertex * directIntensity * NdotL * lightColor.rgb / lengthSq;
+
+  // Calculate specular coefficient
+  // Calculate the view and reflection/halfway direction
+  vec3 viewDir = normalize(viewPosWS.xyz - vertexIn.worldPos.xyz);
+  // Cheaper approximation of reflected direction = reflect(-directionToLight, normal)
+  vec3 halfDir = normalize(viewDir + directionToLight);
+  float NdotH = max(0.0f, dot(fragmentNormalWS, halfDir));
+
+  vec3 specular = directIntensity * specularTextureAtVertex * lightColor.rgb * pow(NdotH, 64.0f) / lengthSq; // Defines shininess
+
+  // spotlight stuff
+  const float noLightAfterMaxDistance = 1 - clamp((directionToLightLength / maxLightDistance), 0, 1);
+  const float theta = dot(directionToLight, normalize(-lightDirection.xyz));
+  const float spotlightIntensityCutoff = clamp((theta - outerAngleDegrees) / (innerAngleDegrees - outerAngleDegrees), 0.0, 1.0);
+
+  diffuse *= spotlightIntensityCutoff;
+  specular *= spotlightIntensityCutoff;
+
+  diffuse *= noLightAfterMaxDistance;
+  specular *= noLightAfterMaxDistance;
+
+  // Calculate the final color
+  vec3 finalColor = ambient + diffuse + specular;
   color = vec4(finalColor, 1.0f);
 }
 )",

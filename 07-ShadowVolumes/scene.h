@@ -19,7 +19,7 @@ namespace LoadedTextures
 }
 
 // Render mode structure
-struct RenderMode
+struct RenderSettings
 {
   // Vsync on?
   bool vsync;
@@ -64,7 +64,7 @@ public:
   // Updates positions
   void Update(float dt);
   // Draw the scene
-  void Draw(const Camera &camera, const RenderMode &renderMode, bool carmackReverse);
+  void Draw(const Camera &camera, const RenderSettings &renderMode, bool carmackReverse);
   // Return the generic VAO for rendering
   GLuint GetGenericVAO() { return _vao; }
 
@@ -80,6 +80,24 @@ private:
     glm::vec4 movement;
   };
 
+  struct SpotLight
+  {
+      // Position of the light
+      glm::vec3 position;
+      // Color and ambient intensity of the light
+      glm::vec4 color;
+      // Parameters for the light movement
+      glm::vec4 movement;
+      // normalized rotation vector?
+      glm::vec3 lightDirection;
+      // intensity inside is full
+      glm::f32 innerLightAngleDegrees;
+      // intensity outside the innerLightAngleDegrees but inside the outerLightAngleDegrees is with falloff
+      glm::f32 outerLightAngleDegrees;
+      // distance after which the light is not calculated
+      glm::f32 lightDistance;
+  };
+
   // All is private, instance is created in GetInstance()
   Scene();
   ~Scene();
@@ -89,14 +107,16 @@ private:
 
   // Helper function for binding the appropriate textures
   void BindTextures(const GLuint &diffuse, const GLuint &normal, const GLuint &specular, const GLuint &occlusion);
-  // Helper function for creating and updating the instance data
+  // Helper function for creating and updating the instance data. Copies array of transforms for the cubes to our _instancingBuffer UBO
   void UpdateInstanceData();
   // Helper function for updating shader program data
   void UpdateProgramData(GLuint program, RenderPass renderPass, const Camera &camera, const glm::vec3 &lightPosition, const glm::vec4 &lightColor);
+  void UpdateProgramDataSpotlights(GLuint program, RenderPass renderPass, const Camera& camera, const glm::vec3& lightPosition, const glm::vec4& lightColor, const glm::vec3& lightDirection, const glm::f32& innerAngleDegrees, const glm::f32& outerAngleDegrees, const glm::f32& maxLightDistance);
   // Helper method to update transformation uniform block
   void UpdateTransformBlock(const Camera &camera);
   // Draw the backdrop, floor and walls
   void DrawBackground(GLuint program, RenderPass renderPass, const Camera &camera, const glm::vec3 &lightPosition, const glm::vec4 &lightColor);
+  void DrawBackgroundSpotlights(GLuint program, RenderPass renderPass, const Camera& camera, const glm::vec3& lightPosition, const glm::vec4& lightColor, const glm::vec3& lightDirection, const glm::f32& innerAngleDegrees, const glm::f32& outerAngleDegrees, const glm::f32& maxLightDistance);
   // Draw cubes
   void DrawObjects(GLuint program, RenderPass renderPass, const Camera &camera, const glm::vec3 &lightPosition, const glm::vec4 &lightColor);
 
@@ -108,10 +128,14 @@ private:
   int _numCubes = 10;
   // Cube positions
   std::vector<glm::vec3> _cubePositions;
-  // Number of lights in the scene
-  int _numLights;
+  // Number of point lights in the scene
+  int _numPointLights;
+  // Number of spot lights in the scene
+  int _numSpotLights;
   // Lights positions
   std::vector<Light> _lights;
+  // Lights positions
+  std::vector<SpotLight> _spotLights;
   // General use VAO
   GLuint _vao = 0;
   // Quad instance
