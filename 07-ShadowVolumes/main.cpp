@@ -110,6 +110,7 @@ GLuint renderTarget = 0;
 // Our depth stencil for rendering
 GLuint depthStencil = 0;
 
+
 // ----------------------------------------------------------------------------
 
 // Forward declaration for the framebuffer creation
@@ -378,6 +379,10 @@ void createFramebuffer(int width, int height, GLsizei MSAA)
   }
   glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_DEPTH_STENCIL_ATTACHMENT, GL_RENDERBUFFER, depthStencil);
 
+  // --------------------------------------------------------------------------
+  // Depth buffer texture for light:
+  // --------------------------------------------------------------------------
+
   // Set the list of draw buffers.
   GLenum drawBuffers[] = {GL_COLOR_ATTACHMENT0};
   glDrawBuffers(1, drawBuffers);
@@ -391,6 +396,7 @@ void createFramebuffer(int width, int height, GLsizei MSAA)
 
   // Bind back the window system provided framebuffer
   glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  scene.CreateDepthBuffer(width, height, MSAA);
 }
 
 // Helper method for graceful shutdown

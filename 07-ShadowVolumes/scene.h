@@ -63,6 +63,7 @@ public:
   void Init(int numCubes, int numLights);
   // Updates positions
   void Update(float dt);
+  void CreateDepthBuffer(int width, int height, int MSAA);
   // Draw the scene
   void Draw(const Camera &camera, const RenderSettings &renderMode, bool carmackReverse);
   // Return the generic VAO for rendering
@@ -110,7 +111,7 @@ private:
   // Helper function for creating and updating the instance data. Copies array of transforms for the cubes to our _instancingBuffer UBO
   void UpdateInstanceData();
   // Helper function for updating shader program data
-  void UpdateProgramData(GLuint program, RenderPass renderPass, const Camera &camera, const glm::vec3 &lightPosition, const glm::vec4 &lightColor);
+  void UpdateProgramData(GLuint program, RenderPass renderPass, const Camera &camera, const glm::vec3 &lightPosition, const glm::vec4 &lightColor, const glm::vec3& lightDirection);
   void UpdateProgramDataSpotlights(GLuint program, RenderPass renderPass, const Camera& camera, const glm::vec3& lightPosition, const glm::vec4& lightColor, const glm::vec3& lightDirection, const glm::f32& innerAngleDegrees, const glm::f32& outerAngleDegrees, const glm::f32& maxLightDistance);
   // Helper method to update transformation uniform block
   void UpdateTransformBlock(const Camera &camera);
@@ -148,4 +149,9 @@ private:
   GLuint _instancingBuffer = 0;
   // Transformation matrices uniform buffer object
   GLuint _transformBlockUBO = 0;
+  // Depth maps for lights
+  //std::vector<GLuint> lightDepthTextures;
+  GLuint depthMapTexture;
+  // FBO for depth map (texture)
+  GLuint depthMapFBO = 0;
 };

@@ -148,12 +148,12 @@ void Scene::Init(int numCubes, int numLights)
   // Create Spot Light as the 2nd
   _spotLights.reserve(_numSpotLights);
   nextPosition = glm::vec4(2.0f, 1.0f, 1.0f, 0.0f);
-  glm::vec3 spotLightDirection = glm::vec3(0.0f, 0.0f, -1.0f);
+  glm::vec3 spotLightDirection = glm::vec3(0.0f, -1.0f, 0.0f);
   glm::f32 innerAngle = 30.0f;
   glm::f32 outerAngle = 40.0f;
   glm::f32 dropoffDistance = 5000.0f;
 
-  _spotLights.push_back({ glm::vec3(-2.0f, 2.0f, 0.0f), glm::vec4(10.0f, 10.0f, 10.0f, ambientIntentsity), nextPosition, 
+  _spotLights.push_back({ glm::vec3(-3.0f, 2.0f, 0.0f), glm::vec4(10.0f, 10.0f, 10.0f, ambientIntentsity), nextPosition, 
                           spotLightDirection, innerAngle, outerAngle, dropoffDistance});
 
   // Generate random positions for the rest of the lights
@@ -264,13 +264,23 @@ void Scene::UpdateInstanceData()
   glBindBufferBase(GL_UNIFORM_BUFFER, 1, 0);
 }
 
-void Scene::UpdateProgramData(GLuint program, RenderPass renderPass, const Camera &camera, const glm::vec3 &lightPosition, const glm::vec4 &lightColor)
+void Scene::UpdateProgramData(GLuint program, RenderPass renderPass, const Camera &camera, const glm::vec3 &lightPosition,
+    const glm::vec4 &lightColor, const glm::vec3 &lightDirection)
 {
   // Update the light position, use 4th component to pass direct light intensity
   if ((int)renderPass & ((int)RenderPass::ShadowVolume | (int)RenderPass::LightPass))
   {
     GLint lightLoc = glGetUniformLocation(program, "lightPosWS");
     glUniform4f(lightLoc, lightPosition.x, lightPosition.y, lightPosition.z, ((int)renderPass & (int)RenderPass::DirectLight) ? 1.0f : 0.0f);
+  }
+
+  if ((int)renderPass & ((int)RenderPass::DepthPass))
+  {
+      glm::mat4 lightView = glm::lookAt(lightPosition, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+      glm::mat4 lightMatrix = camera.GetProjection() * lightView;
+      printf("%f\n  %f\n    %f\n      %f\n", lightMatrix[0].x, lightMatrix[1].y, lightMatrix[2].z, lightMatrix[3].w);
+      GLint lightMatrixLoc = glGetUniformLocation(program, "lightMatrix");
+      glUniformMatrix4fv(lightMatrixLoc, 1, GL_FALSE, &lightMatrix[0][0]);
   }
 
   // Update view position and light color
@@ -353,7 +363,8 @@ void Scene::DrawBackground(GLuint program, RenderPass renderPass, const Camera &
 {
   // Bind the shader program and update its data
   glUseProgram(program);
-  UpdateProgramData(program, renderPass, camera, lightPosition, lightColor);
+  glm::vec3 dummyLightDirection = glm::vec3(0.0f);
+  UpdateProgramData(program, renderPass, camera, lightPosition, lightColor, dummyLightDirection);
 
   // Bind textures
   if ((int)renderPass & (int)RenderPass::LightPass)
@@ -431,7 +442,8 @@ void Scene::DrawObjects(GLuint program, RenderPass renderPass, const Camera &cam
   // Bind the shader program and update its data
   glUseProgram(program);
   // Update the transformation & projection matrices
-  UpdateProgramData(program, renderPass, camera, lightPosition, lightColor);
+  glm::vec3 dummyLightDirection = glm::vec3(0.0f);
+  UpdateProgramData(program, renderPass, camera, lightPosition, lightColor, dummyLightDirection);
 
   // Bind the instancing buffer to the index 1
   glBindBufferBase(GL_UNIFORM_BUFFER, 1, _instancingBuffer);
@@ -443,18 +455,18 @@ void Scene::DrawObjects(GLuint program, RenderPass renderPass, const Camera &cam
   }
 
   // Draw cubes based on the renderPass
-  if ((int)renderPass & (int)RenderPass::ShadowVolume)
-  {
-    // For shadow volumes we need to render using the GL_TRIANGLES_ADJACENCY mode and appropriate geometry
-    glBindVertexArray(_cubeAdjacency->GetVAO());
-    glDrawElementsInstanced(GL_TRIANGLES_ADJACENCY, _cubeAdjacency->GetIBOSize(), GL_UNSIGNED_INT, reinterpret_cast<void*>(0), _numCubes);
-  }
-  else
-  {
+  //if ((int)renderPass & (int)RenderPass::ShadowVolume)
+  //{
+  //  // For shadow volumes we need to render using the GL_TRIANGLES_ADJACENCY mode and appropriate geometry
+  //  glBindVertexArray(_cubeAdjacency->GetVAO());
+  //  glDrawElementsInstanced(GL_TRIANGLES_ADJACENCY, _cubeAdjacency->GetIBOSize(), GL_UNSIGNED_INT, reinterpret_cast<void*>(0), _numCubes);
+  //}
+  /*else
+  {*/
     // All other passes can use default cube VAO and GL_TRIANGLES
     glBindVertexArray(_cube->GetVAO());
     glDrawElementsInstanced(GL_TRIANGLES, _cube->GetIBOSize(), GL_UNSIGNED_INT, reinterpret_cast<void*>(0), _numCubes);
-  }
+  //}
 
   // Unbind the instancing buffer
   glBindBufferBase(GL_UNIFORM_BUFFER, 1, 0);
@@ -496,8 +508,8 @@ void Scene::Draw(const Camera &camera, const RenderSettings &renderMode, bool ca
     // No need to pass real light position and color as we don't need them in the depth pass
     glm::vec3 dummyLightPosition = glm::vec3(0.0f);
     glm::vec4 dummyColor = glm::vec4(0.0f);
-    DrawBackground(shaderProgram[ShaderProgram::DefaultDepthPass], RenderPass::DepthPass, camera, dummyLightPosition, dummyColor);
-    DrawObjects(shaderProgram[ShaderProgram::InstancingDepthPass], RenderPass::DepthPass, camera, dummyLightPosition, dummyColor);
+    //DrawBackground(shaderProgram[ShaderProgram::DefaultDepthPass], RenderPass::DepthPass, camera, dummyLightPosition, dummyColor);
+    //DrawObjects(shaderProgram[ShaderProgram::InstancingDepthPass], RenderPass::DepthPass, camera, dummyLightPosition, dummyColor);
   };
 
   // --------------------------------------------------------------------------
@@ -518,7 +530,7 @@ void Scene::Draw(const Camera &camera, const RenderSettings &renderMode, bool ca
     glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
 
     // draws background
-    //DrawBackground(shaderProgram[ShaderProgram::Default], renderPass, camera, lightPosition, lightColor);
+    DrawBackground(shaderProgram[ShaderProgram::Default], renderPass, camera, lightPosition, lightColor);
     // draws the color (material) of objects
     DrawObjects(shaderProgram[ShaderProgram::Instancing], renderPass, camera, lightPosition, lightColor);
 
@@ -596,6 +608,40 @@ void Scene::Draw(const Camera &camera, const RenderSettings &renderMode, bool ca
       // Disable blending after this pass
       glDisable(GL_BLEND);
   };
+
+  // --------------------------------------------------------------------------
+  // Shadow Map pass drawing:
+  // --------------------------------------------------------------------------
+  auto shadowMapSpotlightPass = [this, &renderMode, &camera](const glm::vec3& lightPosition, const glm::vec4& lightColor, const glm::vec3& lightDirection)
+  {
+      //DrawObjects(shaderProgram[ShaderProgram::InstancedShadowVolume], camera, lightPosition, lightColor);
+      //DrawObjects(shaderProgram[ShaderProgram::InstancingDepthPass], RenderPass::DepthPass, camera, dummyLightPosition, dummyColor);
+      // Bind the shader program and update its data
+      glUseProgram(shaderProgram[ShaderProgram::InstancingDepthPass]);
+      // Update the transformation & projection matrices
+      Camera cameraAtLightPos = camera;
+      cameraAtLightPos.SetTransformation(lightPosition, lightDirection, glm::vec3(0.0f, 1.0f, 0.0f));
+      //cameraAtLightPos.SetProjection(glm::radians(90.0f), ((float)screenWidth)/((float)screenHeight), camera.GetNearClip(), camera.GetFarClip());
+      UpdateProgramData(shaderProgram[ShaderProgram::InstancingDepthPass], RenderPass::DepthPass, cameraAtLightPos, lightPosition, lightColor, lightDirection);
+
+      // Bind depth buffer for rendering the depth into it
+      glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+      glClear(GL_DEPTH_BUFFER_BIT);
+
+      // Bind the instancing buffer to the index 1
+      glBindBufferBase(GL_UNIFORM_BUFFER, 1, _instancingBuffer);
+
+      // Use default cube VAO and GL_TRIANGLES
+      glBindVertexArray(_cube->GetVAO());
+      glDrawElementsInstanced(GL_TRIANGLES, _cube->GetIBOSize(), GL_UNSIGNED_INT, reinterpret_cast<void*>(0), _numCubes);
+
+      // Unbind the instancing buffer
+      glBindBufferBase(GL_UNIFORM_BUFFER, 1, 0);
+      // Unbind the depth framebuffer
+      glBindFramebuffer(GL_FRAMEBUFFER, 0);
+  };
+
+  // --------------------------------------------------------------------------
   
   // Update the scene
   UpdateInstanceData();
@@ -630,6 +676,7 @@ void Scene::Draw(const Camera &camera, const RenderSettings &renderMode, bool ca
   // Render the scene into the depth buffer only, disable color write
   glColorMask(false, false, false, false);
   depthPass();
+  shadowMapSpotlightPass(_spotLights[0].position, _spotLights[0].color, _spotLights[0].lightDirection);
 
   // We primed the depth buffer, no need to write to it anymore
   // Note: for depth primed geometry, it would be the best option to also set depth function to GL_EQUAL
@@ -644,7 +691,7 @@ void Scene::Draw(const Camera &camera, const RenderSettings &renderMode, bool ca
 
     // Draw shadow volumes first, disable color write
     glColorMask(false, false, false, false);
-    shadowPass(_lights[i].position, _lights[i].color);
+    //shadowPass(_lights[i].position, _lights[i].color);
 
     // Draw direct light utilizing stenciled shadows, enable color write
     glColorMask(true, true, true, true);
@@ -662,7 +709,10 @@ void Scene::Draw(const Camera &camera, const RenderSettings &renderMode, bool ca
 
       // Draw shadow volumes first, disable color write
       glColorMask(false, false, false, false);
-      shadowPass(_spotLights[i].position, _spotLights[i].color);
+
+      // This should fill the depth buffer (texture)
+      //shadowMapSpotlightPass(_spotLights[i].position, _spotLights[i].color, _spotLights[i].lightDirection);
+      //shadowPass(_spotLights[i].position, _spotLights[i].color);
 
       // Draw direct light utilizing stenciled shadows, enable color write
       glColorMask(true, true, true, true);
@@ -673,9 +723,50 @@ void Scene::Draw(const Camera &camera, const RenderSettings &renderMode, bool ca
       glDisable(GL_STENCIL_TEST);
       spotLightPass(RenderPass::AmbientLight, _spotLights[i].position, _spotLights[i].color, _spotLights[i].lightDirection, _spotLights[i].innerLightAngleDegrees,
           _spotLights[i].outerLightAngleDegrees, _spotLights[i].lightDistance);
-
   }
 
   // Don't forget to leave the color write enabled
   glColorMask(true, true, true, true);
+}
+
+void Scene::CreateDepthBuffer(int width, int height, int MSAA = 0)
+{
+    // Depth Buffer
+    if (!depthMapFBO)
+    {
+        printf("creating depth buffer \n");
+        glGenFramebuffers(1, &depthMapFBO);
+    }
+
+    // prepare depth buffer (texture) for the shadow map
+    glGenTextures(1, &depthMapTexture);
+    glBindTexture(GL_TEXTURE_2D, depthMapTexture);
+    // Allocate storage for the texture data
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT32, width, height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+    // Set up default filtering modes
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    // Set up depth comparison mode
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_COMPARE_REF_TO_TEXTURE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_COMPARE_FUNC, GL_LEQUAL);
+    // Set up wrapping modes
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    // Set up done, unbind
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+    glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+    glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthMapTexture, 0);
+
+    // We only need single channel (W) for depth, so we will not use RGB, thererore explicitly turn off color buffer
+    glDrawBuffer(GL_NONE);
+    glReadBuffer(GL_NONE);
+    // Check for completeness
+    GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);
+    if (status != GL_FRAMEBUFFER_COMPLETE)
+    {
+        printf("Failed to create depth framebuffer: 0x%04X\n", status);
+    }
+    // Set up done, unbind
+    glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }

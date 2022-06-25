@@ -122,6 +122,16 @@ layout (location = 1) in vec3 normal;
 layout (location = 2) in vec3 tangent;
 layout (location = 3) in vec2 texCoord;
 
+// Default value for cases when we don't need it
+layout (location = 11) uniform mat4 lightMatrix = mat4(1.0f, 0.0f, 0.0f, 0.0f, 
+                                                       0.0f, 1.0f, 0.0f, 0.0f,
+                                                       0.0f, 0.0f, 1.0f, 0.0f,
+                                                       0.0f, 0.0f, 0.0f, 1.0f);
+layout (location = 12) uniform mat4 lightProjection = mat4(1.0f, 0.0f, 0.0f, 0.0f, 
+                                                           0.0f, 1.0f, 0.0f, 0.0f,
+                                                           0.0f, 0.0f, 1.0f, 0.0f,
+                                                           0.0f, 0.0f, 0.0f, 1.0f);
+
 // Must match the structure on the CPU side
 struct InstanceData
 {
@@ -169,6 +179,7 @@ void main()
   vec4 viewPos = vec4(vOut.worldPos * worldToView, 1.0f);
 
   gl_Position = projection * viewPos;
+// gl_Position = lightMatrix * projection * viewPos;
 }
 )",
 // ----------------------------------------------------------------------------
