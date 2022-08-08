@@ -162,6 +162,18 @@ bool compileShaders()
   uniformBlockBinding(shaderProgram[ShaderProgram::InstancingDepthPass]);
   uniformBlockBinding(shaderProgram[ShaderProgram::InstancingDepthPass], "InstanceBuffer", 1);
 
+  // Shader program for instanced geometry rendering with spotlights and shadows
+  shaderProgram[ShaderProgram::InstancingSpotlightShadow] = glCreateProgram();
+  glAttachShader(shaderProgram[ShaderProgram::InstancingSpotlightShadow], vertexShader[VertexShader::VertexShadowSpotlight]);
+  glAttachShader(shaderProgram[ShaderProgram::InstancingSpotlightShadow], fragmentShader[FragmentShader::DefaultShadowSpotlight]);
+  if (!ShaderCompiler::LinkProgram(shaderProgram[ShaderProgram::InstancingSpotlightShadow]))
+  {
+      cleanUp();
+      return false;
+  }
+  uniformBlockBinding(shaderProgram[ShaderProgram::InstancingSpotlightShadow]);
+  uniformBlockBinding(shaderProgram[ShaderProgram::InstancingSpotlightShadow], "InstanceBuffer", 1);
+
   // Shader program for instanced geometry w/ shadow volume extrusion
   shaderProgram[ShaderProgram::InstancedShadowVolume] = glCreateProgram();
   glAttachShader(shaderProgram[ShaderProgram::InstancedShadowVolume], vertexShader[VertexShader::InstancedShadowVolume]);

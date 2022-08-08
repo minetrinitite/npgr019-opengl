@@ -113,13 +113,18 @@ private:
   // Helper function for updating shader program data
   void UpdateProgramData(GLuint program, RenderPass renderPass, const Camera &camera, const glm::vec3 &lightPosition, const glm::vec4 &lightColor, const glm::vec3& lightDirection);
   void UpdateProgramDataSpotlights(GLuint program, RenderPass renderPass, const Camera& camera, const glm::vec3& lightPosition, const glm::vec4& lightColor, const glm::vec3& lightDirection, const glm::f32& innerAngleDegrees, const glm::f32& outerAngleDegrees, const glm::f32& maxLightDistance);
+  void UpdateProgramDataSpotlightsShadow(GLuint program, RenderPass renderPass, const Camera& camera, const glm::vec3& lightPosition, const glm::vec4& lightColor,
+      const glm::vec3& lightDirection, const glm::f32& innerAngleDegrees, const glm::f32& outerAngleDegrees, const glm::f32& maxLightDistance);
   // Helper method to update transformation uniform block
   void UpdateTransformBlock(const Camera &camera);
   // Draw the backdrop, floor and walls
   void DrawBackground(GLuint program, RenderPass renderPass, const Camera &camera, const glm::vec3 &lightPosition, const glm::vec4 &lightColor);
-  void DrawBackgroundSpotlights(GLuint program, RenderPass renderPass, const Camera& camera, const glm::vec3& lightPosition, const glm::vec4& lightColor, const glm::vec3& lightDirection, const glm::f32& innerAngleDegrees, const glm::f32& outerAngleDegrees, const glm::f32& maxLightDistance);
+  void DrawBackgroundSpotlights(GLuint program, RenderPass renderPass, const Camera& camera, const glm::vec3& lightPosition, const glm::vec4& lightColor,
+      const glm::vec3& lightDirection, const glm::f32& innerAngleDegrees, const glm::f32& outerAngleDegrees, const glm::f32& maxLightDistance);
   // Draw cubes
   void DrawObjects(GLuint program, RenderPass renderPass, const Camera &camera, const glm::vec3 &lightPosition, const glm::vec4 &lightColor);
+  void DrawObjectsSpotlightsShadow(GLuint program, RenderPass renderPass, const Camera& camera, const glm::vec3& lightPosition, const glm::vec4& lightColor,
+      const glm::vec3& lightDirection, const glm::f32& innerAngleDegrees, const glm::f32& outerAngleDegrees, const glm::f32& maxLightDistance);
 
   // Textures helper instance
   Textures &_textures;

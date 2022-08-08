@@ -10,8 +10,11 @@
 #include <glad/glad.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <glm/gtx/transform.hpp>
+#include <glm/gtx/string_cast.hpp>
 
 #include <MathSupport.h>
+
+#define GLM_ENABLE_EXPERIMENTAL
 
 // Scaling factor for lights movement curve
 static const glm::vec3 scale = glm::vec3(13.0f, 2.0f, 13.0f);
@@ -138,22 +141,22 @@ void Scene::Init(int numCubes, int numLights)
   // --------------------------------------------------------------------------
 
   // Ambient intensity for the lights
-  const float ambientIntentsity = 1e-3f / numLights;
+  const float ambientIntensity = 1e-3f / numLights;
 
   // Position & color of the first light
   _lights.reserve(_numPointLights);
   glm::vec4 nextPosition = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
-  _lights.push_back({glm::vec3(-3.0f, 3.0f, 0.0f), glm::vec4(10.0f, 10.0f, 10.0f, ambientIntentsity), nextPosition});
+  _lights.push_back({glm::vec3(-3.0f, 3.0f, 0.0f), glm::vec4(10.0f, 10.0f, 10.0f, ambientIntensity), nextPosition});
 
   // Create Spot Light as the 2nd
   _spotLights.reserve(_numSpotLights);
   nextPosition = glm::vec4(2.0f, 1.0f, 1.0f, 0.0f);
-  glm::vec3 spotLightDirection = glm::vec3(0.0f, -1.0f, 0.0f);
+  glm::vec3 spotLightDirection = glm::vec3(0.5f, -0.5f, 0.0f);
   glm::f32 innerAngle = 30.0f;
   glm::f32 outerAngle = 40.0f;
   glm::f32 dropoffDistance = 5000.0f;
 
-  _spotLights.push_back({ glm::vec3(-3.0f, 2.0f, 0.0f), glm::vec4(10.0f, 10.0f, 10.0f, ambientIntentsity), nextPosition, 
+  _spotLights.push_back({ glm::vec3(-3.0f, 2.0f, 0.0f), glm::vec4(10.0f, 10.0f, 10.0f, ambientIntensity), nextPosition, 
                           spotLightDirection, innerAngle, outerAngle, dropoffDistance});
 
   // Generate random positions for the rest of the lights
@@ -168,7 +171,7 @@ void Scene::Init(int numCubes, int numLights)
     float r = getRandom(0.0f, 5.0f);
     float g = getRandom(0.0f, 5.0f);
     float b = getRandom(0.0f, 5.0f);
-    glm::vec4 color = glm::vec4(r, g, b, ambientIntentsity);
+    glm::vec4 color = glm::vec4(r, g, b, ambientIntensity);
 
     _lights.push_back({offset + lissajous(nextPosition, 0.0f) * scale, color, nextPosition});
   }
@@ -278,7 +281,7 @@ void Scene::UpdateProgramData(GLuint program, RenderPass renderPass, const Camer
   {
       glm::mat4 lightView = glm::lookAt(lightPosition, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
       glm::mat4 lightMatrix = camera.GetProjection() * lightView;
-      printf("%f\n  %f\n    %f\n      %f\n", lightMatrix[0].x, lightMatrix[1].y, lightMatrix[2].z, lightMatrix[3].w);
+      //printf("%f\n  %f\n    %f\n      %f\n", lightMatrix[0].x, lightMatrix[1].y, lightMatrix[2].z, lightMatrix[3].w);
       GLint lightMatrixLoc = glGetUniformLocation(program, "lightMatrix");
       glUniformMatrix4fv(lightMatrixLoc, 1, GL_FALSE, &lightMatrix[0][0]);
   }
@@ -307,6 +310,15 @@ void Scene::UpdateProgramDataSpotlights(GLuint program, RenderPass renderPass, c
         glUniform4f(lightLoc, lightPosition.x, lightPosition.y, lightPosition.z, ((int)renderPass & (int)RenderPass::DirectLight) ? 1.0f : 0.0f);
     }
 
+    if ((int)renderPass & ((int)RenderPass::DepthPass))
+    {
+        glm::mat4 lightView = glm::lookAt(lightPosition, glm::vec3(0.0f), glm::vec3(0.0f, 1.0f, 0.0f));
+        glm::mat4 lightMatrix = camera.GetProjection() * lightView;
+        //printf("%f\n  %f\n    %f\n      %f\n", lightMatrix[0].x, lightMatrix[1].y, lightMatrix[2].z, lightMatrix[3].w);
+        GLint lightMatrixLoc = glGetUniformLocation(program, "lightMatrix");
+        glUniformMatrix4fv(lightMatrixLoc, 1, GL_FALSE, &lightMatrix[0][0]);
+    }
+
     // Update view position and light color
     if ((int)renderPass & (int)RenderPass::LightPass)
     {
@@ -328,6 +340,37 @@ void Scene::UpdateProgramDataSpotlights(GLuint program, RenderPass renderPass, c
     glUniform1f(outerAngleDegreesLoc, outerAngleDegrees);
     glUniform1f(maxLightDistanceLoc, maxLightDistance);
 
+}
+
+void Scene::UpdateProgramDataSpotlightsShadow(GLuint program, RenderPass renderPass, const Camera& camera, const glm::vec3& lightPosition, const glm::vec4& lightColor, const glm::vec3& lightDirection, const glm::f32& innerAngleDegrees, const glm::f32& outerAngleDegrees, const glm::f32& maxLightDistance)
+{
+    // Update the light position, use 4th component to pass direct light intensity
+    if ((int)renderPass & ((int)RenderPass::ShadowVolume | (int)RenderPass::LightPass))
+    {
+        GLint lightLoc = glGetUniformLocation(program, "lightPosWS");
+        glUniform4f(lightLoc, lightPosition.x, lightPosition.y, lightPosition.z, ((int)renderPass & (int)RenderPass::DirectLight) ? 1.0f : 0.0f);
+    }
+
+    // Update view position and light color
+    if ((int)renderPass & (int)RenderPass::LightPass)
+    {
+        // Update the view position
+        GLint viewPosLoc = glGetUniformLocation(program, "viewPosWS");
+        glm::vec4 viewPos = camera.GetViewToWorld()[3];
+        glUniform4fv(viewPosLoc, 1, glm::value_ptr(viewPos));
+
+        // Update the light color, 4th component controls ambient light intensity
+        GLint lightColorLoc = glGetUniformLocation(program, "lightColor");
+        glUniform4f(lightColorLoc, lightColor.x, lightColor.y, lightColor.z, ((int)renderPass & (int)RenderPass::AmbientLight) ? lightColor.w : 0.0f);
+    }
+    GLint lightDirectionLoc = glGetUniformLocation(program, "lightDirection");
+    GLint innerAngleDegreesLoc = glGetUniformLocation(program, "innerAngleDegrees");
+    GLint outerAngleDegreesLoc = glGetUniformLocation(program, "outerAngleDegrees");
+    GLint maxLightDistanceLoc = glGetUniformLocation(program, "maxLightDistance");
+    glUniform3fv(lightDirectionLoc, 1, glm::value_ptr(lightDirection));
+    glUniform1f(innerAngleDegreesLoc, innerAngleDegrees);
+    glUniform1f(outerAngleDegreesLoc, outerAngleDegrees);
+    glUniform1f(maxLightDistanceLoc, maxLightDistance);
 }
 
 void Scene::UpdateTransformBlock(const Camera &camera)
@@ -367,6 +410,7 @@ void Scene::DrawBackground(GLuint program, RenderPass renderPass, const Camera &
   UpdateProgramData(program, renderPass, camera, lightPosition, lightColor, dummyLightDirection);
 
   // Bind textures
+  // RenderPass::LightPass will accept DirectLight and AmbientLight
   if ((int)renderPass & (int)RenderPass::LightPass)
   {
     BindTextures(_loadedTextures[LoadedTextures::CheckerBoard], _loadedTextures[LoadedTextures::Blue], _loadedTextures[LoadedTextures::Grey], _loadedTextures[LoadedTextures::White]);
@@ -396,6 +440,7 @@ void Scene::DrawBackground(GLuint program, RenderPass renderPass, const Camera &
   passMatrix = transformation;
   glUniformMatrix4x3fv(0, 1, GL_FALSE, glm::value_ptr(passMatrix));
   glDrawElements(GL_TRIANGLES, _quad->GetIBOSize(), GL_UNSIGNED_INT, reinterpret_cast<void*>(0));
+  glBindVertexArray(0);
 }
 
 void Scene::DrawBackgroundSpotlights(GLuint program, RenderPass renderPass, const Camera& camera, const glm::vec3& lightPosition, const glm::vec4& lightColor,
@@ -406,9 +451,11 @@ void Scene::DrawBackgroundSpotlights(GLuint program, RenderPass renderPass, cons
     UpdateProgramDataSpotlights(program, renderPass, camera, lightPosition, lightColor, lightDirection, innerAngleDegrees, outerAngleDegrees, maxLightDistance);
 
     // Bind textures
-    if ((int)renderPass & (int)RenderPass::LightPass)
+    if ((int)renderPass)
     {
         BindTextures(_loadedTextures[LoadedTextures::CheckerBoard], _loadedTextures[LoadedTextures::Blue], _loadedTextures[LoadedTextures::Grey], _loadedTextures[LoadedTextures::White]);
+        glActiveTexture(GL_TEXTURE0 + 4);
+        glBindTexture(GL_TEXTURE_2D, depthMapTexture);
     }
 
     // Bind the geometry
@@ -454,19 +501,9 @@ void Scene::DrawObjects(GLuint program, RenderPass renderPass, const Camera &cam
     BindTextures(_loadedTextures[LoadedTextures::Diffuse], _loadedTextures[LoadedTextures::Normal], _loadedTextures[LoadedTextures::Specular], _loadedTextures[LoadedTextures::Occlusion]);
   }
 
-  // Draw cubes based on the renderPass
-  //if ((int)renderPass & (int)RenderPass::ShadowVolume)
-  //{
-  //  // For shadow volumes we need to render using the GL_TRIANGLES_ADJACENCY mode and appropriate geometry
-  //  glBindVertexArray(_cubeAdjacency->GetVAO());
-  //  glDrawElementsInstanced(GL_TRIANGLES_ADJACENCY, _cubeAdjacency->GetIBOSize(), GL_UNSIGNED_INT, reinterpret_cast<void*>(0), _numCubes);
-  //}
-  /*else
-  {*/
-    // All other passes can use default cube VAO and GL_TRIANGLES
+  // Draw cubes
     glBindVertexArray(_cube->GetVAO());
     glDrawElementsInstanced(GL_TRIANGLES, _cube->GetIBOSize(), GL_UNSIGNED_INT, reinterpret_cast<void*>(0), _numCubes);
-  //}
 
   // Unbind the instancing buffer
   glBindBufferBase(GL_UNIFORM_BUFFER, 1, 0);
@@ -493,24 +530,61 @@ void Scene::DrawObjects(GLuint program, RenderPass renderPass, const Camera &cam
     glBindVertexArray(_vao);
     glDrawArrays(GL_POINTS, 0, 1);
   }
+  glBindVertexArray(0);
+}
+
+void Scene::DrawObjectsSpotlightsShadow(GLuint program, RenderPass renderPass, const Camera& camera, const glm::vec3& lightPosition, const glm::vec4& lightColor,
+    const glm::vec3& lightDirection, const glm::f32& innerAngleDegrees, const glm::f32& outerAngleDegrees, const glm::f32& maxLightDistance)
+{
+    // Bind the shader program and update its data
+    glUseProgram(program);
+    UpdateProgramDataSpotlights(program, renderPass, camera, lightPosition, lightColor, lightDirection, innerAngleDegrees, outerAngleDegrees, maxLightDistance);
+
+    // Bind the instancing buffer to the index 1
+    glBindBufferBase(GL_UNIFORM_BUFFER, 1, _instancingBuffer);
+
+    // Bind textures
+    if ((int)renderPass & (int)RenderPass::LightPass)
+    {
+        BindTextures(_loadedTextures[LoadedTextures::Diffuse], _loadedTextures[LoadedTextures::Normal], _loadedTextures[LoadedTextures::Specular], _loadedTextures[LoadedTextures::Occlusion]);
+        glActiveTexture(GL_TEXTURE0 + 4);
+        glBindTexture(GL_TEXTURE_2D, depthMapTexture);
+    }
+
+    // Draw cubes
+    glBindVertexArray(_cube->GetVAO());
+    glDrawElementsInstanced(GL_TRIANGLES, _cube->GetIBOSize(), GL_UNSIGNED_INT, reinterpret_cast<void*>(0), _numCubes);
+
+    // Unbind the instancing buffer
+    glBindBufferBase(GL_UNIFORM_BUFFER, 1, 0);
+
+    // --------------------------------------------------------------------------
+
+    // Draw the light object during the ambient pass
+    if ((int)renderPass & (int)RenderPass::AmbientLight)
+    {
+        glUseProgram(shaderProgram[ShaderProgram::PointRendering]);
+
+        // Update the light position
+        GLint loc = glGetUniformLocation(shaderProgram[ShaderProgram::PointRendering], "position");
+        glUniform3fv(loc, 1, glm::value_ptr(lightPosition));
+
+        // Update the color
+        loc = glGetUniformLocation(shaderProgram[ShaderProgram::PointRendering], "color");
+        glUniform3fv(loc, 1, glm::value_ptr(lightColor * 0.05f));
+
+        // Disable blending for lights
+        //glDisable(GL_BLEND);
+
+        glPointSize(10.0f);
+        glBindVertexArray(_vao);
+        glDrawArrays(GL_POINTS, 0, 1);
+    }
 }
 
 void Scene::Draw(const Camera &camera, const RenderSettings &renderMode, bool carmackReverse)
 {
   UpdateTransformBlock(camera);
-
-  // --------------------------------------------------------------------------
-  // Depth pass drawing:
-  // --------------------------------------------------------------------------
-  // lambda, called once
-  auto depthPass = [this, &renderMode, &camera]()
-  {
-    // No need to pass real light position and color as we don't need them in the depth pass
-    glm::vec3 dummyLightPosition = glm::vec3(0.0f);
-    glm::vec4 dummyColor = glm::vec4(0.0f);
-    //DrawBackground(shaderProgram[ShaderProgram::DefaultDepthPass], RenderPass::DepthPass, camera, dummyLightPosition, dummyColor);
-    //DrawObjects(shaderProgram[ShaderProgram::InstancingDepthPass], RenderPass::DepthPass, camera, dummyLightPosition, dummyColor);
-  };
 
   // --------------------------------------------------------------------------
   // Light pass drawing:
@@ -522,12 +596,6 @@ void Scene::Draw(const Camera &camera, const RenderSettings &renderMode, bool ca
     glEnable(GL_BLEND);
     glBlendEquation(GL_FUNC_ADD);   
     glBlendFunc(GL_ONE, GL_ONE);
-    
-    // Pass only if equal to 0, i.e., outside shadow volume
-    glStencilFunc(GL_EQUAL, 0x00, 0xff);
-
-    // Don't update the stencil buffer
-    glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
 
     // draws background
     DrawBackground(shaderProgram[ShaderProgram::Default], renderPass, camera, lightPosition, lightColor);
@@ -536,39 +604,6 @@ void Scene::Draw(const Camera &camera, const RenderSettings &renderMode, bool ca
 
     // Disable blending after this pass
     glDisable(GL_BLEND);
-  };
-
-  // --------------------------------------------------------------------------
-  // Shadow pass drawing:
-  // --------------------------------------------------------------------------
-  // lambda
-  auto shadowPass = [this, &renderMode, &camera, &carmackReverse](const glm::vec3 &lightPosition, const glm::vec4 &lightColor)
-  {
-    // Disable face culling
-    glDisable(GL_CULL_FACE);
-
-    // Always pass the stencil test
-    glStencilFunc(GL_ALWAYS, 0x00, 0xff);
-
-    if (carmackReverse)
-    {
-      // Set stencil operations for depth fail algorithm (licensed)
-      // arguments: face, stencil fail, depth fail, depth pass
-      glStencilOpSeparate(GL_BACK, GL_KEEP, GL_INCR_WRAP, GL_KEEP);
-      glStencilOpSeparate(GL_FRONT, GL_KEEP, GL_DECR_WRAP, GL_KEEP);
-    }
-    else
-    {
-      // Set stencil operations for depth pass algorithm
-      // arguments: face, stencil fail, depth fail, depth pass
-      glStencilOpSeparate(GL_BACK, GL_KEEP, GL_KEEP, GL_DECR_WRAP);
-      glStencilOpSeparate(GL_FRONT, GL_KEEP, GL_KEEP, GL_INCR_WRAP);
-    }
-
-    DrawObjects(shaderProgram[ShaderProgram::InstancedShadowVolume], RenderPass::ShadowVolume, camera, lightPosition, lightColor);
-
-    // Enable it back again
-    glEnable(GL_CULL_FACE);
   };
 
   // --------------------------------------------------------------------------
@@ -591,19 +626,15 @@ void Scene::Draw(const Camera &camera, const RenderSettings &renderMode, bool ca
       glBlendEquation(GL_FUNC_ADD);
       glBlendFunc(GL_ONE, GL_ONE);
 
-      // Pass only if equal to 0, i.e., outside shadow volume
-      glStencilFunc(GL_EQUAL, 0x00, 0xff);
-
-      // Don't update the stencil buffer
-      glStencilOp(GL_KEEP, GL_KEEP, GL_KEEP);
-
       // draws background
-      float innerAgleCos = glm::cos(glm::radians(innerAngleDegrees));
+      float innerAngleCos = glm::cos(glm::radians(innerAngleDegrees));
       float outerAngleCos = glm::cos(glm::radians(outerAngleDegrees));
       DrawBackgroundSpotlights(shaderProgram[ShaderProgram::SpotlightDefault], renderPass, camera, lightPosition, lightColor, lightDirection,
-          innerAgleCos, outerAngleCos, maxLightDistance);
+          innerAngleCos, outerAngleCos, maxLightDistance);
       // draws the color (material) of objects
-      DrawObjects(shaderProgram[ShaderProgram::Instancing], renderPass, camera, lightPosition, lightColor);
+      //DrawObjects(shaderProgram[ShaderProgram::Instancing], renderPass, camera, lightPosition, lightColor);
+      DrawObjectsSpotlightsShadow(shaderProgram[ShaderProgram::InstancingSpotlightShadow], renderPass, camera, lightPosition, lightColor, lightDirection,
+          innerAngleCos, outerAngleCos, maxLightDistance);
 
       // Disable blending after this pass
       glDisable(GL_BLEND);
@@ -614,19 +645,28 @@ void Scene::Draw(const Camera &camera, const RenderSettings &renderMode, bool ca
   // --------------------------------------------------------------------------
   auto shadowMapSpotlightPass = [this, &renderMode, &camera](const glm::vec3& lightPosition, const glm::vec4& lightColor, const glm::vec3& lightDirection)
   {
+      // Enable additive alpha blending
+      glEnable(GL_BLEND);
+      glBlendEquation(GL_FUNC_ADD);
+      glBlendFunc(GL_ONE, GL_ONE);
       //DrawObjects(shaderProgram[ShaderProgram::InstancedShadowVolume], camera, lightPosition, lightColor);
       //DrawObjects(shaderProgram[ShaderProgram::InstancingDepthPass], RenderPass::DepthPass, camera, dummyLightPosition, dummyColor);
       // Bind the shader program and update its data
       glUseProgram(shaderProgram[ShaderProgram::InstancingDepthPass]);
       // Update the transformation & projection matrices
-      Camera cameraAtLightPos = camera;
+      Camera cameraAtLightPos = Camera(camera);
       cameraAtLightPos.SetTransformation(lightPosition, lightDirection, glm::vec3(0.0f, 1.0f, 0.0f));
       //cameraAtLightPos.SetProjection(glm::radians(90.0f), ((float)screenWidth)/((float)screenHeight), camera.GetNearClip(), camera.GetFarClip());
       UpdateProgramData(shaderProgram[ShaderProgram::InstancingDepthPass], RenderPass::DepthPass, cameraAtLightPos, lightPosition, lightColor, lightDirection);
 
       // Bind depth buffer for rendering the depth into it
+      // TODO: the fact that we have to remember the previous FB means that the depth buffer is used in the wrong order. Should be used earlier
+      GLint previousFramebufferId = 0;
+      glGetIntegerv(GL_FRAMEBUFFER_BINDING, &previousFramebufferId);
       glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+      glClearDepth(0.5);
       glClear(GL_DEPTH_BUFFER_BIT);
+      glClearDepth(1);
 
       // Bind the instancing buffer to the index 1
       glBindBufferBase(GL_UNIFORM_BUFFER, 1, _instancingBuffer);
@@ -638,7 +678,9 @@ void Scene::Draw(const Camera &camera, const RenderSettings &renderMode, bool ca
       // Unbind the instancing buffer
       glBindBufferBase(GL_UNIFORM_BUFFER, 1, 0);
       // Unbind the depth framebuffer
-      glBindFramebuffer(GL_FRAMEBUFFER, 0);
+      glBindFramebuffer(GL_FRAMEBUFFER, previousFramebufferId);
+      // Disable blending after this pass
+      glDisable(GL_BLEND);
   };
 
   // --------------------------------------------------------------------------
@@ -660,69 +702,52 @@ void Scene::Draw(const Camera &camera, const RenderSettings &renderMode, bool ca
   glPolygonMode(GL_FRONT_AND_BACK, renderMode.wireframe ? GL_LINE : GL_FILL);
 
   // Enable depth test, clamp, and write
-  // enable Depth Buffer
   glEnable(GL_DEPTH_TEST);
-  // ?
   glEnable(GL_DEPTH_CLAMP);
-  // ?
   glDepthFunc(GL_LEQUAL);
-  // write into Depth Buffer
+  // enable write into Depth Buffer
   glDepthMask(GL_TRUE);
 
   // Clear the color and depth buffer
   glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
   glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-  // Render the scene into the depth buffer only, disable color write
-  glColorMask(false, false, false, false);
-  depthPass();
-  shadowMapSpotlightPass(_spotLights[0].position, _spotLights[0].color, _spotLights[0].lightDirection);
-
-  // We primed the depth buffer, no need to write to it anymore
   // Note: for depth primed geometry, it would be the best option to also set depth function to GL_EQUAL
-  glDepthMask(GL_FALSE);
+ 
+
+  // first depth buffer
+  for (int i = 0; i < _numSpotLights; ++i)
+  {
+      // This should fill the depth buffer (texture)
+      glColorMask(false, false, false, false);
+      shadowMapSpotlightPass(_spotLights[i].position, _spotLights[i].color, _spotLights[i].lightDirection);
+  }
+  for (int i = 0; i < _numPointLights; ++i)
+  {
+      // This should fill the depth buffer (texture)
+      // Waiting until start to implement Point Lights (Omnidirectional Shadow Maps)
+      //shadowMapSpotlightPass(_spotLights[i].position, _spotLights[i].color, _spotLights[i].lightDirection);
+  }
 
   // For each light we need to render the scene with its contribution
   for (int i = 0; i < _numPointLights; ++i)
   {
-    // Enable stencil test and clear the stencil buffer
-    glClear(GL_STENCIL_BUFFER_BIT);
-    glEnable(GL_STENCIL_TEST);
-
-    // Draw shadow volumes first, disable color write
-    glColorMask(false, false, false, false);
-    //shadowPass(_lights[i].position, _lights[i].color);
-
-    // Draw direct light utilizing stenciled shadows, enable color write
+    // Draw direct light, enable color write
     glColorMask(true, true, true, true);
     lightPass(RenderPass::DirectLight, _lights[i].position, _lights[i].color);
 
-    // Disable stencil test as we don't want shadows to affect ambient light
-    glDisable(GL_STENCIL_TEST);
-    lightPass(RenderPass::AmbientLight, _lights[i].position, _lights[i].color);
+    //lightPass(RenderPass::AmbientLight, _lights[i].position, _lights[i].color);
   }
 
-  for (int i = 0; i < _numSpotLights; ++i) {
-      // Enable stencil test and clear the stencil buffer
-      glClear(GL_STENCIL_BUFFER_BIT);
-      glEnable(GL_STENCIL_TEST);
-
-      // Draw shadow volumes first, disable color write
-      glColorMask(false, false, false, false);
-
-      // This should fill the depth buffer (texture)
-      //shadowMapSpotlightPass(_spotLights[i].position, _spotLights[i].color, _spotLights[i].lightDirection);
-      //shadowPass(_spotLights[i].position, _spotLights[i].color);
-
-      // Draw direct light utilizing stenciled shadows, enable color write
+  for (int i = 0; i < _numSpotLights; ++i)
+  {
+      // Draw direct light, enable color write
       glColorMask(true, true, true, true);
-      spotLightPass(RenderPass::DirectLight, _spotLights[i].position, _spotLights[i].color, _spotLights[i].lightDirection, _spotLights[i].innerLightAngleDegrees,
-          _spotLights[i].outerLightAngleDegrees, _spotLights[i].lightDistance);
+      //spotLightPass(RenderPass::DirectLight, _spotLights[i].position, _spotLights[i].color, _spotLights[i].lightDirection, _spotLights[i].innerLightAngleDegrees,
+      //    _spotLights[i].outerLightAngleDegrees, _spotLights[i].lightDistance);
 
-      // Disable stencil test as we don't want shadows to affect ambient light
-      glDisable(GL_STENCIL_TEST);
-      spotLightPass(RenderPass::AmbientLight, _spotLights[i].position, _spotLights[i].color, _spotLights[i].lightDirection, _spotLights[i].innerLightAngleDegrees,
-          _spotLights[i].outerLightAngleDegrees, _spotLights[i].lightDistance);
+      //spotLightPass(RenderPass::AmbientLight, _spotLights[i].position, _spotLights[i].color, _spotLights[i].lightDirection, _spotLights[i].innerLightAngleDegrees,
+      //    _spotLights[i].outerLightAngleDegrees, _spotLights[i].lightDistance);
   }
 
   // Don't forget to leave the color write enabled
